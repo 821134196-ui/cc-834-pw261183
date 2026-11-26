@@ -1,0 +1,15 @@
+{
+  "name": "node-replacement-scheduling-bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "节点替换调度练习台：机架冗余、不可驱逐窗口、容量约束下的安全序列与扰动重排",
+  "scripts": {
+    "demo": "node scripts/demo.mjs",
+    "test": "node --test test/*.test.js",
+    "start": "node scripts/serve.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

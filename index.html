@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>节点替换调度练习台</title>
+    <meta name="description" content="在机架冗余、实例不可驱逐时段与容量约束下推演节点替换序列，并在备用机临时不可用时只重排未执行动作。" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主内容</a>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <h1>节点替换调度练习台</h1>
+            <p class="subtitle">机架冗余 · 不可驱逐窗口 · 可用容量 · 扰动后仅重排未执行动作</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="segmented" role="group" aria-label="优化目标">
+            <button class="btn" data-objective="fastest" type="button">最快完工</button>
+            <button class="btn" data-objective="balanced" type="button">均衡</button>
+            <button class="btn" data-objective="low-cross" type="button">最少跨机架</button>
+          </div>
+          <button class="btn" id="theme-toggle" type="button" aria-pressed="false">🌙 深色</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="container">
+      <section class="preset-strip" id="preset-strip" aria-label="内置节点与工作负载组"></section>
+
+      <div class="grid-workspace">
+        <section class="card editor-card" aria-labelledby="input-title">
+          <div class="card-head">
+            <div>
+              <h2 id="input-title">输入：节点与工作负载</h2>
+              <p class="card-description">可直接编辑 JSON，或载入内置练习组。</p>
+            </div>
+          </div>
+          <label for="scenario-json" class="sr-only">场景 JSON</label>
+          <textarea id="scenario-json" class="json-editor" spellcheck="false" aria-describedby="json-help"></textarea>
+          <div id="validation" class="validation ok" role="status"></div>
+          <div class="btn-row" style="margin-top: 10px">
+            <button class="btn primary" id="apply-json" type="button">校验并重新规划</button>
+            <button class="btn" id="format-json" type="button">格式化</button>
+            <button class="btn" id="reset-runtime" type="button">重置执行</button>
+          </div>
+          <p id="json-help" class="footer-note">
+            时间为离散槽；<code>noEvict: [[2,5)]</code> 写作 <code>[[2,5]]</code>，表示迁移区间不能与该窗口相交。
+          </p>
+        </section>
+
+        <section class="card plan-card" aria-labelledby="plan-title">
+          <div class="card-head">
+            <div>
+              <h2 id="plan-title">可行序列与取舍</h2>
+              <p class="card-description" id="scenario-description"></p>
+            </div>
+            <span id="feasibility-badge" class="badge"></span>
+          </div>
+
+          <div class="metric-grid" id="metric-grid"></div>
+          <div id="blocker-slot"></div>
+
+          <div class="card-head" style="margin-top: 14px">
+            <div>
+              <h3>Pareto 安全序列</h3>
+              <p class="card-description">点击不同点可查看“完工时间 ↔ 跨机架迁移量”的代表序列。</p>
+            </div>
+          </div>
+          <div class="pareto-list" id="pareto-list"></div>
+
+          <div class="btn-row" style="margin: 8px 0 12px">
+            <button class="btn primary" id="execute-next" type="button">▶ 执行重排后的第一个动作</button>
+            <button class="btn" id="drill-button" type="button"></button>
+          </div>
+
+          <div id="gantt-slot"></div>
+          <ol class="step-list" id="step-list"></ol>
+
+          <h3>顺序与取舍解释</h3>
+          <ul class="rationale" id="rationale-list"></ul>
+        </section>
+
+        <aside class="stack runtime-card">
+          <section class="card" aria-labelledby="runtime-title">
+            <div class="card-head">
+              <div>
+                <h2 id="runtime-title">运行时状态</h2>
+                <p class="card-description">临时停用备用机后，已执行前缀不会回滚。</p>
+              </div>
+            </div>
+            <div id="runtime-summary"></div>
+            <div id="executed-chain"></div>
+          </section>
+
+          <section class="card" aria-labelledby="topology-title">
+            <div class="card-head">
+              <div>
+                <h2 id="topology-title">机架 / 容量拓扑</h2>
+                <p class="card-description">按钮模拟“临时标记不可用 / 恢复”。</p>
+              </div>
+            </div>
+            <div class="rack-grid" id="rack-grid"></div>
+          </section>
+        </aside>
+
+        <section class="card full" aria-labelledby="compare-title">
+          <div class="card-head">
+            <div>
+              <h2 id="compare-title">两组约束对照：为什么换目标/约束后顺序不同</h2>
+              <p class="card-description">同一组节点与实例，只改变机架跨数约束；两侧均可切换优化目标。</p>
+            </div>
+          </div>
+          <div class="compare-grid" id="compare-grid"></div>
+        </section>
+
+        <section class="card full" aria-labelledby="objective-compare-title">
+          <div class="card-head">
+            <div>
+              <h2 id="objective-compare-title">同一组约束：换目标后顺序为何不同</h2>
+              <p class="card-description">左侧最小化完工时间，右侧最小化跨机架次数；若两个目标落在同一序列上，说明该场景没有可观察的目标冲突。</p>
+            </div>
+          </div>
+          <div id="objective-diff" class="compare-grid"></div>
+        </section>
+
+        <section class="card full" aria-labelledby="model-title">
+          <h2 id="model-title">调度规则与阻塞判定</h2>
+          <table class="kv-table">
+            <tbody>
+              <tr><th>机架冗余</th><td>每个服务读取 <code>minReady</code>、<code>minRacks</code>、<code>maxPerRack</code>。驱逐瞬间先把实例置为 not-ready 并检查；迁到目标后再次检查完成态。</td></tr>
+              <tr><th>不可驱逐时段</th><td>迁移区间 <code>[start,end)</code> 不得与该实例任一 <code>noEvict</code> 窗口相交；若相交，计划等到窗口结束。</td></tr>
+              <tr><th>可用容量</th><td>目标节点必须同时满足 CPU、内存剩余容量。停用节点不接收新实例；已执行动作和已放置负载保持不变。</td></tr>
+              <tr><th>重排边界</th><td>扰动后固定 <code>runtime.executed</code>，只对当前仍在 <code>replace:true</code> 节点上的实例和未执行收尾动作重新搜索。</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
